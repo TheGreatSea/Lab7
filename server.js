@@ -6,42 +6,22 @@ const morgan = require('morgan');
 const authorization = require('./middleware/authorization');
 const app = express();
 
+
+const mongoose = require('mongoose')
+const { bookmarks } = require('./models/bookmarksModel');
 app.use(morgan('dev'));
 app.use(authorization);
 
-const books = [{
-        id: uuid.v4(),
-        title: "Paintings",
-        description: "Books about paintings and hotcakes",
-        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        rating: 10
-    },
-    {
-        id: uuid.v4(),
-        title: "RickRoll",
-        description: "How to master the art of reddit trolling",
-        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        rating: 10
-    },
-    {
-        id: uuid.v4(),
-        title: "Tanuki",
-        description: "The invastigation on one of the best brands of jeans",
-        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        rating: 9
-    },
-    {
-        id: uuid.v4(),
-        title: "Screws",
-        description: "A compendium of Terry Crews photos",
-        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        rating: 10
-    }
-]
-
-
 app.get('/bookmarks', (req, res) => {
-    return res.status(200).json(books)
+    bookmarks
+        .getBookmarks()
+        .then(result => {
+            return res.status(200).json(result);
+        })
+        .catch(err => {
+            res.statusMessage = "Error with the database";
+            return res.status(500).end();
+        });
 });
 
 app.get('/bookmark', (req, res) => {
@@ -53,16 +33,20 @@ app.get('/bookmark', (req, res) => {
         res.statusMesagge = "Title is required";
         return res.status(406).end();
     }
-    let result = books.find((book) => {
-        if (book.title == title) {
-            return book
-        }
-    });
-    if (!result) {
-        res.statusMesagge = `${title} not found`;
-        return res.status(404).end();
-    }
-    return res.status(200).json(result);
+
+    bookmarks
+        .getBookmark({ title })
+        .then(result => {
+            if (result.lengtj === 0) {
+                res.statusMesagge = `${title} not found`;
+                return res.status(404).end();
+            }
+            return res.status(200).json(result);
+        })
+        .catch(err => {
+            res.statusMessage = "Error with the database";
+            return res.status(500).end();
+        });
 });
 
 app.post('/bookmarks', jsonParser, (req, res) => {
@@ -73,18 +57,6 @@ app.post('/bookmarks', jsonParser, (req, res) => {
         res.statusMessage = "Missing Fields";
         res.status(406).end();
     }
-    let flag = true;
-    for (let i = 0; i < books.length; i++) {
-        if (books[i].title === title) {
-            flag = !flag;
-            break;
-        }
-    }
-
-    if (!flag) {
-        res.statusMessage = "The book is already on the bookmarks";
-        return res.status(409).end();
-    }
 
     let newBookmark = {
         id: uuid.v4(),
@@ -93,8 +65,20 @@ app.post('/bookmarks', jsonParser, (req, res) => {
         url: url,
         rating: rating
     }
-    books.push(newBookmark);
-    return res.status(201).json(newBookmark);
+    bookmarks
+        .createBookmark(newBookmark)
+        .then(result => {
+            if (result.errmsg) {
+                res.statusMessage = "The book is already on the bookmarks" +
+                    result.errmsg;
+                return res.status(409).end();
+            }
+            return res.status(201).json(result);
+        })
+        .catch(err => {
+            res.statusMessage = "Error with the database";
+            return res.status(500).end();
+        });
 });
 
 app.delete('/bookmark/:id', (req, res) => {
@@ -104,20 +88,23 @@ app.delete('/bookmark/:id', (req, res) => {
         res.statusMessage = "Missing id";
         return res.status(406).end();
     }
-    let bookToRemove = books.findIndex((book) => {
-        if (book.id == id) {
-            return true;
-        }
-    });
-    if (bookToRemove < 0) {
-        res.statusMessage = "The id of the book was not found on the list of the bookmarks";
-        return res.status(404).end();
-    }
-    books.splice(bookToRemove, 1);
-    return res.status(200).end();
+    bookmarks
+        .deleteBookmark({ id })
+        .then(result => {
+            if (result.deletedCount === 0) {
+                res.statusMessage = "The id of the book was not found on the list of the bookmarks";
+                return res.status(404).end();
+            }
+            return res.status(200).json(result);
+        })
+        .catch(err => {
+            res.statusMessage = "Error with the database";
+            return res.status(500).end();
+        });
 });
 
 app.patch('/bookmark/:id', jsonParser, (req, res) => {
+    console.log(req.body);
     let { id, title, description, url, rating } = req.body;
     let paramsID = req.params.id;
     console.log(id);
@@ -129,37 +116,63 @@ app.patch('/bookmark/:id', jsonParser, (req, res) => {
         res.statusMessage = "The ids do not match";
         return res.status(409).end();
     }
-    let result = books.find((book) => {
-        if (book.id == id) {
-            return book
-        }
-    });
-    if (!result) {
-        res.statusMessage = "The id given was not found";
-        return res.status(404).end();
+    let Bookmark = {
+        id: String(id)
     }
+
     if (title) {
-        result.title = title;
+        Bookmark['title'] = String(title);
     }
     if (description) {
-        result.description = description;
+        Bookmark['description'] = String(description);
     }
     if (url) {
-        result.url = url;
+        Bookmark['url'] = String(url);
     }
     if (rating) {
-        result.rating = Number(rating);
+        Bookmark['rating'] = parseInt(rating);
     }
-    res.status(202).json(result);
+    console.log(Bookmark);
+
+    bookmarks
+        .updateBookmark({ id: id }, Bookmark)
+        .then(result => {
+            return res.status(202).json(result);
+        })
+        .catch(err => {
+            res.statusMessage = "Error with the database";
+            return res.status(500).end();
+        });
+
 });
 
-app.listen(8025, () => {
-    console.log("Server on port 8025 is running");
+app.listen(27017, () => {
+    console.log("Server on port 27017 is running");
+
+    new Promise((resolve, reject) => {
+        const settings = {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            useCreateIndex: true
+        };
+        mongoose.connect('mongodb://localhost/bookmarksdb', settings, (err) => {
+            if (err) {
+                return reject(err);
+            } else {
+                console.log('Database connected successfully.');
+                return resolve();
+            }
+        })
+    })
+
+    .catch(err => {
+        console.log(err);
+    })
 });
 
-// Base URL : http://localhost:8025/
-// GET endpoint : http://localhost:8025/bookmarks
-// GET endpoint : http://localhost:8025/bookmark?title=value
-// POST endpoint : http://localhost:8025/bookmarks
-// DELETE endpoint : http://localhost:8025/bookmark/id 
-// PATCH endpoint: http://localhost:8025/bookmark/id
+// Base URL : http://localhost:27017/
+// GET endpoint : http://localhost:27017/bookmarks
+// GET endpoint : http://localhost:27017/bookmark?title=value
+// POST endpoint : http://localhost:27017/bookmarks
+// DELETE endpoint : http://localhost:27017/bookmark/id 
+// PATCH endpoint: http://localhost:27017/bookmark/id

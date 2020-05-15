@@ -5,10 +5,13 @@ const uuid = require('uuid');
 const morgan = require('morgan');
 const authorization = require('./middleware/authorization');
 const app = express();
-
-
+//const cors = require('./middleware/cors');
+const { DATABASE_URL, PORT } = require('./config');
 const mongoose = require('mongoose')
 const { bookmarks } = require('./models/bookmarksModel');
+
+//app.use(cors);
+app.use(express.static('public'));
 app.use(morgan('dev'));
 app.use(authorization);
 
@@ -146,28 +149,27 @@ app.patch('/bookmark/:id', jsonParser, (req, res) => {
 
 });
 
-app.listen(27017, () => {
-    console.log("Server on port 27017 is running");
-
+app.listen(PORT, () => {
+    console.log("this server is running on port 27017");
     new Promise((resolve, reject) => {
-        const settings = {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            useCreateIndex: true
-        };
-        mongoose.connect('mongodb://localhost/bookmarksdb', settings, (err) => {
-            if (err) {
-                return reject(err);
-            } else {
-                console.log('Database connected successfully.');
-                return resolve();
-            }
+            const settings = {
+                useNewUrlParser: true,
+                useUnifiedTopology: true,
+                useCreateIndex: true
+            };
+            mongoose.connect(DATABASE_URL, settings, (err) => {
+                if (err) {
+                    return reject(err);
+                } else {
+                    console.log("Database connected successfully.");
+                    return resolve();
+                }
+            })
         })
-    })
+        .catch(err => {
+            console.log(err);
+        })
 
-    .catch(err => {
-        console.log(err);
-    })
 });
 
 // Base URL : http://localhost:27017/

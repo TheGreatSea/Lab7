@@ -5,12 +5,12 @@ const uuid = require('uuid');
 const morgan = require('morgan');
 const authorization = require('./middleware/authorization');
 const app = express();
-//const cors = require('./middleware/cors');
+const cors = require('./middleware/cors');
 const { DATABASE_URL, PORT } = require('./config');
 const mongoose = require('mongoose')
 const { bookmarks } = require('./models/bookmarksModel');
 
-//app.use(cors);
+app.use(cors);
 app.use(express.static('public'));
 app.use(morgan('dev'));
 app.use(authorization);
